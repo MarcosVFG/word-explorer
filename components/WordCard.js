@@ -8,10 +8,35 @@ const WordCard = () => {
   const [allWordsShown, setAllWordsShown] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voices, setVoices] = useState([]);
 
   // Initialize or reset the words list
   useEffect(() => {
     resetWords();
+  }, []);
+
+  // Load available voices
+  useEffect(() => {
+    // Function to load and set voices
+    const loadVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+    };
+
+    // Load voices immediately if available
+    loadVoices();
+
+    // Some browsers (like Chrome) load voices asynchronously
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // Cleanup
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
   }, []);
 
   const resetWords = () => {
@@ -65,6 +90,18 @@ const WordCard = () => {
     setIsFlipped(false); // Reset flip state for new word
   };
 
+  // Debug function to show available voices
+  const debugVoices = (e) => {
+    e.stopPropagation();
+    if ('speechSynthesis' in window) {
+      const availableVoices = window.speechSynthesis.getVoices();
+      console.log('Available voices:', availableVoices.map(v => `${v.name} (${v.lang})`));
+      alert(`Available voices: ${availableVoices.length}\nCheck console for details`);
+    } else {
+      alert('Speech synthesis not supported');
+    }
+  };
+
   const handleCardClick = () => {
     setIsFlipped(!isFlipped);
   };
@@ -79,6 +116,31 @@ const WordCard = () => {
       
       // Set language to English
       utterance.lang = 'en-US';
+      
+      // Try to find an English voice
+      // First priority: voices with 'en-US' language code
+      let englishVoice = voices.find(voice => 
+        voice.lang === 'en-US' && !voice.name.includes('Google'));
+      
+      // Second priority: any voice with 'en-' prefix
+      if (!englishVoice) {
+        englishVoice = voices.find(voice => 
+          voice.lang.startsWith('en-') && !voice.name.includes('Google'));
+      }
+      
+      // Third priority: any voice with 'en' in the language code
+      if (!englishVoice) {
+        englishVoice = voices.find(voice => 
+          voice.lang.includes('en'));
+      }
+      
+      // If we found an English voice, use it
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+        console.log('Using voice:', englishVoice.name, englishVoice.lang);
+      } else {
+        console.log('No English voice found. Available voices:', voices);
+      }
       
       // Optional: set a slightly slower rate for better clarity
       utterance.rate = 0.9;
@@ -200,6 +262,15 @@ const WordCard = () => {
               >
                 Next Word
               </button>
+              {process.env.NODE_ENV === 'development' && (
+                <button
+                  onClick={debugVoices}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                  title="Debug Voices"
+                >
+                  Debug
+                </button>
+              )}
             </div>
           </div>
         ) : (
